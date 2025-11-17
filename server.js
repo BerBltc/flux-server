@@ -1,42 +1,46 @@
-const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
+import express from "express";
+import { createServer } from "http";
+import { Server } from "socket.io";
 
 const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-const clients = new Map();
-
-wss.on('connection', (ws) => {
-  ws.on('message', (raw) => {
-    let msg;
-    try { msg = JSON.parse(raw); } catch { return; }
-
-    if (msg.type === 'auth') {
-      ws.userId = msg.userId;
-      clients.set(msg.userId, ws);
-      return;
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*"
     }
-
-    if (!ws.userId) return;
-
-    const sendTo = clients.get(msg.to);
-    if (sendTo) {
-      sendTo.send(JSON.stringify({
-        type: msg.type,
-        from: ws.userId,
-        payload: msg.payload || {}
-      }));
-    }
-  });
-
-  ws.on('close', () => {
-    if (ws.userId) clients.delete(ws.userId);
-  });
 });
 
-app.get('/', (_, res) => res.send('Flux server aktif'));
+app.get("/", (req, res) => {
+    res.send("Flux Server Çalışıyor");
+});
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT);
+// Kullanıcı bağlandığında
+io.on("connection", (socket) => {
+    console.log("Yeni kullanıcı bağlandı:", socket.id);
+
+    // Mesajlaşma
+    socket.on("message", (data) => {
+        io.emit("message", data);
+    });
+
+    // WebRTC — ses & görüntü
+    socket.on("webrtc-offer", (data) => {
+        socket.broadcast.emit("webrtc-offer", data);
+    });
+
+    socket.on("webrtc-answer", (data) => {
+        socket.broadcast.emit("webrtc-answer", data);
+    });
+
+    socket.on("webrtc-ice-candidate", (data) => {
+        socket.broadcast.emit("webrtc-ice-candidate", data);
+    });
+
+    socket.on("disconnect", () => {
+        console.log("Kullanıcı çıktı:", socket.id);
+    });
+});
+
+httpServer.listen(10000, () => {
+    console.log("Server 10000 portunda çalışıyor");
+});
